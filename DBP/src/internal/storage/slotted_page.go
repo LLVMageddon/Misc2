@@ -3,12 +3,12 @@ package storage
 //REFACTOR
 
 import (
-	"cmp"
+	// "cmp"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"slices"
+	// "slices"
 )
 
 const (
@@ -174,7 +174,7 @@ func deserializeHeader(pHeader []byte) (*header, error) {
 
 func deserializeData(pSlotCount uint16, pData []byte) (*data, error) {
 	slotCount := pSlotCount
-	if (int(slotCount) * SlotSize) > len(pData){
+	if (int(slotCount) * SlotSize) > len(pData) {
 		return nil, errors.New("corrupt page: slot dir exceeds page data")
 	}
 	slots := make([]slot, slotCount)
@@ -186,9 +186,9 @@ func deserializeData(pSlotCount uint16, pData []byte) (*data, error) {
 		slotOffset := count * SlotSize
 		offset := binary.LittleEndian.Uint16(pData[slotOffset:])
 		length := binary.LittleEndian.Uint16(pData[slotOffset+SlotLengthSize:])
-		
-		if length != 0{
-			if offset < HeaderSize || offset > PageSize || length > (offset - HeaderSize){
+
+		if length != 0 {
+			if offset < HeaderSize || offset > PageSize || length > (offset-HeaderSize) {
 				return nil, errors.New("corrupt page: slot record out of bounds")
 			}
 
@@ -203,14 +203,13 @@ func deserializeData(pSlotCount uint16, pData []byte) (*data, error) {
 			copy(record, pData[start:end])
 			rawData[count] = record
 
-
 		}
 
 		slots[count] = slot{
-			index: uint16(count),
+			index:  uint16(count),
 			offset: offset,
 			length: length,
-		}	
+		}
 	}
 
 	data := &data{
@@ -236,15 +235,65 @@ func validateChecksum(pData [PageSize]byte) (bool, error) {
 	return true, nil
 }
 
-func recalculateChecksum(rawData *[8192]byte) {
-	binary.LittleEndian.PutUint32(rawData[OffsetChecksum:], 0)
-	checksum := crc32.ChecksumIEEE(rawData[:])
-	binary.LittleEndian.PutUint32(rawData[OffsetChecksum:], checksum)
+func recalculateChecksum(pData *[8192]byte) {
+	binary.LittleEndian.PutUint32(pData[OffsetChecksum:], 0)
+	checksum := crc32.ChecksumIEEE(pData[:])
+	binary.LittleEndian.PutUint32(pData[OffsetChecksum:], checksum)
+}
+
+func findFreeSlot(pData *[PageSize]byte) (uint16, bool) {
+
+	slotCount := binary.LittleEndian.Uint16(pData[OffsetSlotCount:])
+
+	for idx := range slotCount {
+		offset := HeaderSize + (idx * SlotSize)
+		length := binary.LittleEndian.Uint16(pData[offset+SlotLengthSize:])
+		if length == 0 {
+			return idx, true
+		}
+	}
+	return 0, false
+}
+
+func freeSpace(pData *[PageSize]byte) uint16 {
+	freeStart := binary.LittleEndian.Uint16(pData[OffsetFreeStart:])
+	freeEnd := binary.LittleEndian.Uint16(pData[OffsetFreeEnd:])
+	freespace := freeEnd - freeStart
+	return freespace
+}
+
+func reuseSlot(pIdx uint16, pData *[PageSize]byte, pRecord []byte) (uint16, error) {
+	recordSize := uint16(len(pRecord))
+	offset := HeaderSize + (pIdx * SlotSize)
+	freespace := freeSpace(pData)
+	freeEnd := binary.LittleEndian.Uint16(pData[OffsetFreeEnd:])
+
+	if freespace > recordSize {
+		newFreeEnd := freeEnd - recordSize
+		copy(pData[newFreeEnd:freeEnd], pRecord[:])
+
+		binary.LittleEndian.PutUint16(pData[offset:], uint16(freeEnd))
+		binary.LittleEndian.PutUint16(pData[offset+SlotLengthSize:], uint16(recordSize))
+		binary.LittleEndian.PutUint16(pData[OffsetFreeEnd:], newFreeEnd)
+		recalculateChecksum(pData)
+		return pIdx + 1, nil
+
+	}
+	return 0, errors.New("error reusing a dead slot")
+}
+
+func getFreestartFreeEndSlotCount(pData *[PageSize]byte) (uint16, uint16, uint16) {
+	FreeStart := binary.LittleEndian.Uint16(pData[OffsetFreeStart:])
+	FreeEnd := binary.LittleEndian.Uint16(pData[OffsetFreeEnd:])
+	SlotCount := binary.LittleEndian.Uint16(pData[OffsetSlotCount:])
+
+	return FreeStart, FreeEnd, SlotCount
 }
 
 // End of Helper functions
 
 func NewSlottedPage(pPageId uint64) (*SlottedPage, error) {
+	// DONE
 	header := &header{
 		magic:     PageMagic,
 		version:   1,
@@ -278,6 +327,7 @@ func NewSlottedPage(pPageId uint64) (*SlottedPage, error) {
 }
 
 func (sp *SlottedPage) getPage() (*page, error) {
+	// DONE
 	p, err := deserialize(sp)
 	if err != nil {
 		return nil, err
@@ -286,80 +336,55 @@ func (sp *SlottedPage) getPage() (*page, error) {
 }
 
 func (sp *SlottedPage) addRecord(pRecord []byte) (uint16, error) {
-	//REFACTOR
+	// DONE
+	// REFACTOR
 	// TBD: Should record id start at 1 or 0?
 	// NOTE: Per dev doc: you do not need to leave an artifical buffer between slots and record data. They can safely touch. The only padding you need to worry about is hardware/data alignment, ensuring records start on 4-byte or 8-byte boundaries.:set wrap
+	if len(pRecord) == 0 {
+		return 0, errors.New("empty record, REALLY!!?")
+	}
 	validChecksum, err := validateChecksum(sp.Data)
-	if err != nil && !validChecksum{
+	if err != nil && !validChecksum {
 		return 0, err
 	}
 
-	if len(pRecord) > (PageSize - HeaderSize - SlotSize){
+	if len(pRecord) > (PageSize - HeaderSize - SlotSize) {
 		return 0, errors.New("record is too large for a page")
 	}
 
 	recordSize := uint16(len(pRecord))
-	// if recordSize == 0 {
-	// 	return 0, nil
-	// }
 
 	rawData := &sp.Data
 
-	slotCount := binary.LittleEndian.Uint16(rawData[OffsetSlotCount:])
-	freeStart := binary.LittleEndian.Uint16(rawData[OffsetFreeStart:])
-	freeEnd := binary.LittleEndian.Uint16(rawData[OffsetFreeEnd:])
+	freeStart, freeEnd, slotCount := getFreestartFreeEndSlotCount(rawData)
 
-	if freeStart > freeEnd || freeEnd > PageSize || freeStart < HeaderSize{
+	if freeStart > freeEnd || freeEnd > PageSize || freeStart < HeaderSize {
 		return 0, errors.New("corrupt page: invalud free-space bounds")
 	}
 
 	freespace := freeEnd - freeStart
 
-	for count := uint16(0); count < slotCount; count++ {
-		slotOffset := HeaderSize + (count * SlotSize)
-		length := binary.LittleEndian.Uint16(rawData[slotOffset+SlotLengthSize:])
-		if length == 0 {
-			// if freeEnd < recordSize || (freeEnd - recordSize) < freeStart{ //
-			// if freespace <= recordSize {
-				// if freespace < recordSize {
-				// continue
-				// break
-			// }
-			if length != 0{
-				continue
-			}
-			if freespace < recordSize{
-				break
-			}
-
-			newFreeEnd := freeEnd - recordSize
-
-			copy(rawData[newFreeEnd:freeEnd], pRecord[:])
-			
-			binary.LittleEndian.PutUint16(rawData[slotOffset:], uint16(freeEnd))
-			binary.LittleEndian.PutUint16(rawData[slotOffset+SlotLengthSize:], uint16(recordSize))
-			binary.LittleEndian.PutUint16(rawData[OffsetFreeEnd:], newFreeEnd)
-			recalculateChecksum(rawData)
-			return count + 1, nil
-		}
+	idx, empty := findFreeSlot(rawData)
+	if empty && freespace > recordSize {
+		return reuseSlot(idx, rawData, pRecord)
 	}
 
-	// if (freeEnd - freeStart) <= recordSize + SlotSize {
 	if freespace <= recordSize+SlotSize {
-		// if freespace < recordSize+SlotSize {
-		// err := sp.compactPage()
 		err := sp.compactPage()
 		if err != nil {
 			return 0, fmt.Errorf("error: there was an error compacting the page\t %v", err)
 		}
 
-		freeStart = binary.LittleEndian.Uint16(rawData[OffsetFreeStart:])
-		freeEnd = binary.LittleEndian.Uint16(rawData[OffsetFreeEnd:])
-		slotCount = binary.LittleEndian.Uint16(rawData[OffsetSlotCount:])
+		freeStart, freeEnd, slotCount = getFreestartFreeEndSlotCount(rawData)
 		if (freeEnd - (freeStart + SlotSize)) <= recordSize {
-			// if (freeEnd - (freeStart + SlotSize)) < recordSize {
 			return 0, errors.New("error: page is full")
 		}
+		// return sp.addRecord(pRecord) //HACK
+		idx, empty := findFreeSlot(rawData)
+		if empty {
+			return reuseSlot(idx, rawData, pRecord)
+		}
+
 	}
 
 	copy(rawData[freeEnd-recordSize:freeEnd], pRecord[:])
@@ -375,133 +400,95 @@ func (sp *SlottedPage) addRecord(pRecord []byte) (uint16, error) {
 	return slotCount, nil //FIXME: you cant use the slotCount and recourd id?
 }
 
-func (sp *SlottedPage) compactPageOld() error {
+func (sp *SlottedPage) compactPage() error {
+	// DONE
 	// REFACTOR
-	// FIXME: Logic is wrong
 	data := &sp.Data
 	slotCount := binary.LittleEndian.Uint16(data[OffsetSlotCount:])
 
 	if slotCount == 0 {
-		return errors.New("error: slot count before compact is 0")
+		// return errors.New("error: slot count before compact is 0")
+		binary.LittleEndian.PutUint16(data[OffsetFreeStart:], HeaderSize)
+		binary.LittleEndian.PutUint16(data[OffsetFreeEnd:], PageSize)
+		recalculateChecksum(data)
+		return nil
 	}
 
-	// slots := make([]slot, slotCount)
-	slots := make([]slot, 0)
-	// slotLengthOffset := OffsetFreeStart
+	type activeSlot struct {
+		index  uint16
+		offset uint16
+		length uint16
+		bytes  []byte
+	}
+
+	slots := make([]activeSlot, 0)
 
 	for idx := uint16(0); idx < slotCount; idx++ {
-		slotLengthOffset := (idx * SlotSize) + HeaderSize
-		length := binary.LittleEndian.Uint16(data[slotLengthOffset+SlotOffsetSize:])
+		slotOffset := (idx * SlotSize) + HeaderSize
+		length := binary.LittleEndian.Uint16(data[slotOffset+SlotOffsetSize:])
 		if length != 0 {
-			slots = append(slots, slot{
+			offset := binary.LittleEndian.Uint16(data[slotOffset:])
+			if offset < HeaderSize || offset > PageSize || length > (offset-HeaderSize) {
+				return errors.New("corrupt page: invalid slot bounds")
+			}
+			record := make([]byte, length)
+			copy(record, data[offset-length:offset])
+			slots = append(slots, activeSlot{
 				index:  idx,
-				offset: binary.LittleEndian.Uint16(data[slotLengthOffset:]),
-				length: binary.LittleEndian.Uint16(data[slotLengthOffset+SlotOffsetSize:]),
+				offset: offset,
+				length: length,
+				bytes:  record,
 			})
 		}
 	}
 
-	slices.SortFunc(slots, func(a, b slot) int {
-		// NOTE: Sorting slots based on data offset desc
-		return cmp.Compare(b.offset, a.offset)
-	})
+	// slices.SortFunc(slots, func(a, b activeSlot) int {
+	// 	// NOTE: Sorting slots based on data offset desc
+	// 	return cmp.Compare(b.offset, a.offset)
+	// })
 
 	tempBuf := make([]byte, PageSize)
-	newFreeStart := HeaderSize
-	newFreeEnd := PageSize
+	freeStart := HeaderSize
+	freeEnd := PageSize
 
-	for idx := 0; idx < len(slots); idx++ {
-		slotOffset := HeaderSize + (idx * SlotSize)
-		binary.LittleEndian.PutUint16(tempBuf[slotOffset:], slots[idx].offset)
-		binary.LittleEndian.PutUint16(tempBuf[slotOffset+SlotLengthSize:], slots[idx].length)
-		newFreeStart += SlotSize
-		newFreeEnd -= int(slots[idx].length)
+	activeSlotCounter := 0
+	for x := uint16(0); x < slotCount; x++ {
+		length := uint16(0)
+
+		// if slots[activeSlotCounter].index == x {
+		if activeSlotCounter < len(slots) && slots[activeSlotCounter].index == x {
+			length = slots[activeSlotCounter].length
+			copy(tempBuf[freeEnd-int(length):freeEnd], slots[activeSlotCounter].bytes)
+			activeSlotCounter++
+		}
+
+		slotOffset := HeaderSize + (x * SlotSize)
+		binary.LittleEndian.PutUint16(tempBuf[slotOffset:], uint16(freeEnd))
+		binary.LittleEndian.PutUint16(tempBuf[slotOffset+SlotLengthSize:], length)
+
+		freeEnd -= int(length)
+		freeStart += SlotSize
+
+		if freeStart > freeEnd {
+			return errors.New("corrupt page: record overlap slot dir")
+		}
+
 	}
 
 	copy(data[HeaderSize:PageSize], tempBuf[HeaderSize:PageSize])
-	binary.LittleEndian.PutUint16(data[OffsetFreeStart:], uint16(newFreeStart))
-	binary.LittleEndian.PutUint16(data[OffsetFreeEnd:], uint16(newFreeEnd))
-	binary.LittleEndian.PutUint16(data[OffsetSlotCount:], uint16(len(slots)))
+	binary.LittleEndian.PutUint16(data[OffsetFreeStart:], uint16(freeStart))
+	binary.LittleEndian.PutUint16(data[OffsetFreeEnd:], uint16(freeEnd))
 
 	recalculateChecksum(data)
 
 	return nil
-}
-
-func (sp *SlottedPage) compactPage() error{
-	//WIP:
-	//FIXME: Logic is wrong
-	//TBD: Back to docs, for proper understanding, not workd of mouth.
-	data := &sp.Data
-	slotCount := binary.LittleEndian.Uint16(data[OffsetSlotCount:])
-
-	if slotCount == 0{
-		return nil
-	}
-
-	type liveSlot struct{
-		index uint16
-		length uint16
-		bytes []byte
-	}
-
-	slots := make([]liveSlot, 0, slotCount)
-
-	for idx := uint16(0); idx < slotCount; idx ++{
-		slotOffset := HeaderSize + (idx * SlotSize)
-		offset := binary.LittleEndian.Uint16(data[slotOffset:])
-		length := binary.LittleEndian.Uint16(data[slotOffset+SlotOffsetSize:])
-
-		if length == 0{
-			continue
-		}
-
-		if offset < HeaderSize || offset > PageSize || length > (offset - HeaderSize){
-			return errors.New("corrup page: invalid slot bounds")
-		}
-
-		record := make([]byte, length)
-		copy(record, data[offset - length: offset])
-
-		slots = append(slots, liveSlot{
-			index : idx,
-			length: length,
-			bytes: record,
-		})
-	}
-
-	freeEnd := uint16(PageSize)
-	
-	// for _, s := range slots{
-	for idx := 0; idx < len(slots); idx++{
-		s := slots[idx]
-		copy(data[freeEnd - s.length:freeEnd], s.bytes)
-		
-		// slotOffset := HeaderSize + (s.index * SlotSize)
-		slotOffset := HeaderSize + (idx * SlotSize)
-		binary.LittleEndian.PutUint16(data[slotOffset:], freeEnd - s.length)
-		binary.LittleEndian.PutUint16(data[slotOffset+SlotLengthSize:], s.length)
-		freeEnd -= s.length
-	}
-
-	freeStart := HeaderSize + (slotCount * SlotSize)
-	if freeStart > freeEnd{
-		return errors.New("corrupt page: records overlap slot dir")
-	}
-
-	binary.LittleEndian.PutUint16(data[OffsetFreeStart:], freeStart)
-	binary.LittleEndian.PutUint16(data[OffsetFreeEnd:], freeEnd)
-
-	recalculateChecksum(data)
-	return nil
-
 }
 
 func (sp *SlottedPage) removeRecord(pRecordId uint16) (bool, error) {
 	// DONE
 	// TBD: Should record id start at 1 or 0?
 	validChecksum, err := validateChecksum(sp.Data)
-	if err != nil && !validChecksum{
+	if err != nil && !validChecksum {
 		return false, err
 	}
 
@@ -516,7 +503,7 @@ func (sp *SlottedPage) removeRecord(pRecordId uint16) (bool, error) {
 	pRecordId -= 1
 
 	length := binary.LittleEndian.Uint16(data[HeaderSize+(SlotSize*pRecordId)+SlotLengthSize:])
-	if length == 0{
+	if length == 0 {
 		return false, errors.New("error: record already deleted")
 	}
 
@@ -535,7 +522,7 @@ func (sp *SlottedPage) getRecord(pRecordId uint16) ([]byte, error) {
 	if err != nil && !validChecksum {
 		return nil, err
 	}
-	
+
 	slotCount := binary.LittleEndian.Uint16(data[OffsetSlotCount:])
 	if slotCount == 0 {
 		return nil, errors.New("error record does not exist")
@@ -547,7 +534,7 @@ func (sp *SlottedPage) getRecord(pRecordId uint16) ([]byte, error) {
 	pRecordId -= 1
 	slotOffset := binary.LittleEndian.Uint16(data[HeaderSize+(SlotSize*pRecordId):])
 	slotLength := binary.LittleEndian.Uint16(data[HeaderSize+(SlotSize*pRecordId)+SlotLengthSize:])
-	
+
 	if slotLength == 0 {
 		return nil, errors.New("error: record does not exist")
 	}
@@ -559,7 +546,7 @@ func (sp *SlottedPage) getRecord(pRecordId uint16) ([]byte, error) {
 }
 
 func (sp *SlottedPage) updateRecord(pRecordId uint16, pRecord []byte) (uint16, error) {
-	// TODO: implement this record update function 
+	// TODO: implement this record update function
 	// TBD: Is this really needed? Its go the require alot of shifting of data.
 	panic("unimplemented")
 }
