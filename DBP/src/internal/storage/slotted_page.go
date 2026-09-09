@@ -326,7 +326,7 @@ func NewSlottedPage(pPageId uint64) (*SlottedPage, error) {
 	return sp, nil
 }
 
-func (sp *SlottedPage) getPage() (*page, error) {
+func (sp *SlottedPage) GetPage() (*page, error) {
 	// DONE
 	p, err := deserialize(sp)
 	if err != nil {
@@ -335,7 +335,7 @@ func (sp *SlottedPage) getPage() (*page, error) {
 	return p, nil
 }
 
-func (sp *SlottedPage) addRecord(pRecord []byte) (uint16, error) {
+func (sp *SlottedPage) AddRecord(pRecord []byte) (uint16, error) {
 	// DONE
 	// REFACTOR
 	// TBD: Should record id start at 1 or 0?
@@ -484,7 +484,7 @@ func (sp *SlottedPage) compactPage() error {
 	return nil
 }
 
-func (sp *SlottedPage) removeRecord(pRecordId uint16) (bool, error) {
+func (sp *SlottedPage) RemoveRecord(pRecordId uint16) (bool, error) {
 	// DONE
 	// TBD: Should record id start at 1 or 0?
 	validChecksum, err := validateChecksum(sp.Data)
@@ -513,7 +513,7 @@ func (sp *SlottedPage) removeRecord(pRecordId uint16) (bool, error) {
 	return true, nil
 }
 
-func (sp *SlottedPage) getRecord(pRecordId uint16) ([]byte, error) {
+func (sp *SlottedPage) GetRecord(pRecordId uint16) ([]byte, error) {
 	// DONE
 	// TBD: Should record id start at 1 or 0?
 	data := &sp.Data
@@ -545,7 +545,7 @@ func (sp *SlottedPage) getRecord(pRecordId uint16) ([]byte, error) {
 	return returnData, nil
 }
 
-func (sp *SlottedPage) updateRecord(pRecordId uint16, pRecord []byte) (uint16, error) {
+func (sp *SlottedPage) UpdateRecord(pRecordId uint16, pRecord []byte) (uint16, error) {
 	// TODO: implement this record update function
 	// TBD: Is this really needed? Its go the require alot of shifting of data.
 	panic("unimplemented")

@@ -61,7 +61,7 @@ func TestSlottedPageAddRecord(t *testing.T) {
 	slots, rawData := dataSetOne()
 
 	for x := 0; x < len(slots); x++ {
-		recordId, err := sp.addRecord(rawData[x])
+		recordId, err := sp.AddRecord(rawData[x])
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -70,7 +70,7 @@ func TestSlottedPageAddRecord(t *testing.T) {
 		}
 	}
 
-	page, err := sp.getPage()
+	page, err := sp.GetPage()
 	if err != nil {
 		t.Fatal("error: deserializing the slotted page")
 	}
@@ -98,17 +98,17 @@ func TestSlottedPageAddRecord(t *testing.T) {
 func TestReuseDeletedSlot(t *testing.T) {
 	// PASSED
 	sp, _ := NewSlottedPage(1)
-	r1, _ := sp.addRecord([]byte("record 1"))
+	r1, _ := sp.AddRecord([]byte("record 1"))
 	// r2, _ := sp.addRecord([]byte("record 2"))
-	sp.addRecord([]byte("record 2"))
+	sp.AddRecord([]byte("record 2"))
 
-	deleted, err := sp.removeRecord(r1)
+	deleted, err := sp.RemoveRecord(r1)
 
 	if !deleted {
 		t.Fatalf("error: failed to delete: %v", err)
 	}
 
-	newSlotId, err := sp.addRecord([]byte("record 3"))
+	newSlotId, err := sp.AddRecord([]byte("record 3"))
 
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
@@ -123,15 +123,15 @@ func TestMultipleReuse(t *testing.T) {
 	// PASSED
 	sp, _ := NewSlottedPage(1)
 
-	r1, _ := sp.addRecord([]byte("Slot 0"))
-	sp.addRecord([]byte("Slot 1"))
-	r3, _ := sp.addRecord([]byte("Slot 2"))
+	r1, _ := sp.AddRecord([]byte("Slot 0"))
+	sp.AddRecord([]byte("Slot 1"))
+	r3, _ := sp.AddRecord([]byte("Slot 2"))
 
-	sp.removeRecord(r1)
-	sp.removeRecord(r3)
+	sp.RemoveRecord(r1)
+	sp.RemoveRecord(r3)
 
-	rr1, _ := sp.addRecord([]byte("Reused 0"))
-	rr2, _ := sp.addRecord([]byte("Reused 2"))
+	rr1, _ := sp.AddRecord([]byte("Reused 0"))
+	rr2, _ := sp.AddRecord([]byte("Reused 2"))
 
 	if rr1 != r1 && rr1 != r3 {
 		t.Errorf("expected rr1 to reuse slot %d or %d, got %d", r1, r3, rr1)
@@ -148,29 +148,29 @@ func TestCompactOnAdd(t *testing.T) {
 	//FAILED
 	sp, _ := NewSlottedPage(1)
 
-	d1, _ := sp.addRecord(make([]byte, 4123))
+	d1, _ := sp.AddRecord(make([]byte, 4123))
 	// d2, _ := sp.addRecord(make([]byte, 4010))
-	sp.addRecord(make([]byte, 4010))
+	sp.AddRecord(make([]byte, 4010))
 
-	deleted, err := sp.removeRecord(d1)
+	deleted, err := sp.RemoveRecord(d1)
 	if !deleted {
 		t.Fatal(err)
 	}
 
-	d3, err := sp.addRecord(make([]byte, 3500))
+	d3, err := sp.AddRecord(make([]byte, 3500))
 
 	if err != nil {
 		t.Fatalf("expected add to succeed after automatic compactions, got: %v", err)
 	}
 
-	pp, _ := sp.getPage()
+	pp, _ := sp.GetPage()
 	fmt.Print(pp)
 
 	if d3 != d1 {
 		t.Fatalf("expected id %v, got: %v", d1, d3)
 	}
 
-	record, err := sp.getRecord(d3)
+	record, err := sp.GetRecord(d3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestFillPage(t *testing.T) {
 	record := []byte("a")
 
 	for {
-		_, err = sp.addRecord(record)
+		_, err = sp.AddRecord(record)
 		if err != nil {
 			t.Logf("%v", err)
 			break
@@ -212,9 +212,9 @@ func TestFillPage(t *testing.T) {
 func TestPageFullNoCompactionPossible(t *testing.T) {
 	// PASSED
 	sp, _ := NewSlottedPage(1)
-	sp.addRecord(make([]byte, 4080))
-	sp.addRecord(make([]byte, 4066))
-	_, err := sp.addRecord([]byte("Overflow"))
+	sp.AddRecord(make([]byte, 4080))
+	sp.AddRecord(make([]byte, 4066))
+	_, err := sp.AddRecord([]byte("Overflow"))
 
 	if err == nil {
 		t.Error("expected page full error when add to completely full page")
@@ -224,7 +224,7 @@ func TestPageFullNoCompactionPossible(t *testing.T) {
 func TestRecordToLarge(t *testing.T) {
 	// PASSED
 	sp, _ := NewSlottedPage(1)
-	_, err := sp.addRecord(make([]byte, (PageSize-HeaderSize)+5))
+	_, err := sp.AddRecord(make([]byte, (PageSize-HeaderSize)+5))
 	// _, err := sp.addRecord(make([]byte, 0))
 	if err == nil {
 		t.Error("expected error for oversized recored, got nil")
@@ -232,10 +232,11 @@ func TestRecordToLarge(t *testing.T) {
 }
 
 func TestAddRecordAndGetRecord(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 
 	record1 := []byte("hello")
-	rID, err := sp.addRecord(record1)
+	rID, err := sp.AddRecord(record1)
 	if err != nil {
 		t.Fatalf("addRecord failed: %v", err)
 	}
@@ -244,7 +245,7 @@ func TestAddRecordAndGetRecord(t *testing.T) {
 		t.Fatalf("expected record ID 1, got %d", rID)
 	}
 
-	got, err := sp.getRecord(rID)
+	got, err := sp.GetRecord(rID)
 	if err != nil {
 		t.Fatalf("getRecord failed: %v", err)
 	}
@@ -256,20 +257,21 @@ func TestAddRecordAndGetRecord(t *testing.T) {
 }
 
 func TestAddRecordReusesDeletedSlot(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 
-	id1, _ := sp.addRecord([]byte("record 1"))
-	id2, _ := sp.addRecord([]byte("record 2"))
+	id1, _ := sp.AddRecord([]byte("record 1"))
+	id2, _ := sp.AddRecord([]byte("record 2"))
 
 	if id1 != 1 || id2 != 2 {
 		t.Fatalf("unexpected IDs: %d, %d", id1, id2)
 	}
 
-	if _, err := sp.removeRecord(id1); err != nil {
+	if _, err := sp.RemoveRecord(id1); err != nil {
 		t.Fatalf("rremoveRecord failed: %v", err)
 	}
 
-	id3, err := sp.addRecord([]byte("record 3"))
+	id3, err := sp.AddRecord([]byte("record 3"))
 	if err != nil {
 		t.Fatalf("addRecord failed: %v", err)
 	}
@@ -277,7 +279,7 @@ func TestAddRecordReusesDeletedSlot(t *testing.T) {
 		t.Fatalf("expected reused record ID 1, got %d", id3)
 	}
 
-	got, err := sp.getRecord(1)
+	got, err := sp.GetRecord(1)
 	if err != nil {
 		t.Fatalf("getRecord failed: %v", err)
 	}
@@ -287,14 +289,14 @@ func TestAddRecordReusesDeletedSlot(t *testing.T) {
 }
 
 func TestCompactPagePreservesRecordID(t *testing.T) {
-
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 
-	id1, _ := sp.addRecord([]byte("record 1"))
-	id2, _ := sp.addRecord([]byte("record 2"))
-	id3, _ := sp.addRecord([]byte("record 3"))
+	id1, _ := sp.AddRecord([]byte("record 1"))
+	id2, _ := sp.AddRecord([]byte("record 2"))
+	id3, _ := sp.AddRecord([]byte("record 3"))
 
-	if _, err := sp.removeRecord(id2); err != nil {
+	if _, err := sp.RemoveRecord(id2); err != nil {
 		t.Fatalf("removeRecord failed %v", err)
 	}
 
@@ -302,12 +304,12 @@ func TestCompactPagePreservesRecordID(t *testing.T) {
 		t.Fatalf("compactPage failed: %v", err)
 	}
 
-	got1, err := sp.getRecord(id1)
+	got1, err := sp.GetRecord(id1)
 	if err != nil {
 		t.Fatalf("getRecord(1) failed: %v", err)
 	}
 
-	got3, err := sp.getRecord(id3)
+	got3, err := sp.GetRecord(id3)
 	if err != nil {
 		t.Fatalf("getRecord(3) failed: %v", err)
 	}
@@ -320,28 +322,29 @@ func TestCompactPagePreservesRecordID(t *testing.T) {
 		t.Fatalf("record 3 changed: %q", got3)
 	}
 
-	if _, err := sp.getRecord(2); err == nil {
+	if _, err := sp.GetRecord(2); err == nil {
 		t.Fatalf("expected record 2 to remain deleted")
 	}
 
 }
 
 func TestAddRecordCompactThenReuseDeleteSlot(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 
 	largeRecord := bytes.Repeat([]byte("A"), 2000)
 
-	id1, err := sp.addRecord(largeRecord)
+	id1, err := sp.AddRecord(largeRecord)
 	if err != nil {
 		t.Fatalf("add record 1: %v", err)
 	}
 
-	id2, err := sp.addRecord(largeRecord)
+	id2, err := sp.AddRecord(largeRecord)
 	if err != nil {
 		t.Fatalf("add record 2: %v", err)
 	}
 
-	id3, err := sp.addRecord(largeRecord)
+	id3, err := sp.AddRecord(largeRecord)
 	if err != nil {
 		t.Fatalf("add record 3: %v", err)
 	}
@@ -350,11 +353,11 @@ func TestAddRecordCompactThenReuseDeleteSlot(t *testing.T) {
 		t.Fatalf("unexpected ID: %d %d %d", id1, id2, id3)
 	}
 
-	if _, err := sp.removeRecord(id2); err != nil {
+	if _, err := sp.RemoveRecord(id2); err != nil {
 		t.Fatalf("remove record 2: %v", err)
 	}
 
-	id4, err := sp.addRecord(largeRecord)
+	id4, err := sp.AddRecord(largeRecord)
 	if err != nil {
 		t.Fatalf("add record 4: %v", err)
 	}
@@ -362,7 +365,7 @@ func TestAddRecordCompactThenReuseDeleteSlot(t *testing.T) {
 		t.Fatalf("expeected record ID 2 to be reuesed after compaction, got %d", id4)
 	}
 
-	got, err := sp.getRecord(2)
+	got, err := sp.GetRecord(2)
 	if err != nil {
 		t.Fatalf("getRecord(2): %v", err)
 	}
@@ -373,61 +376,67 @@ func TestAddRecordCompactThenReuseDeleteSlot(t *testing.T) {
 }
 
 func TestGetRecordZeroId(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 
-	if _, err := sp.getRecord(0); err == nil {
+	if _, err := sp.GetRecord(0); err == nil {
 		t.Fatalf("expected error for record ID 0")
 	}
 }
 
 func TestRemoveRecorcZeroID(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 
-	if _, err := sp.removeRecord(0); err == nil {
+	if _, err := sp.RemoveRecord(0); err == nil {
 		t.Fatalf("expected error fo record ID 0")
 	}
 }
 
 func TestGetRecordOutOfBounds(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
-	if _, err := sp.getRecord(999); err == nil {
+	if _, err := sp.GetRecord(999); err == nil {
 		t.Fatalf("expected error for non existent record")
 	}
 }
 
 func TestRemoveRecordTwice(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
-	id, err := sp.addRecord([]byte("FRPS"))
+	id, err := sp.AddRecord([]byte("FRPS"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := sp.removeRecord(id); err != nil {
+	if _, err := sp.RemoveRecord(id); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := sp.removeRecord(id); err == nil {
+	if _, err := sp.RemoveRecord(id); err == nil {
 		t.Fatal("expected second remove to fail")
 	}
 
 }
 
 func TestEmptyRecord(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(0)
-	_, err := sp.addRecord([]byte{})
+	_, err := sp.AddRecord([]byte{})
 	if err == nil {
 		t.Fatal("expected empty record to be rejected")
 	}
 }
 
 func TestMaxRecord(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(5)
 	record := bytes.Repeat([]byte("X"), PageSize-HeaderSize-SlotSize-1) // NOTE: I haven't decide if I want padding between slots and records
-	id, err := sp.addRecord(record)
+	id, err := sp.AddRecord(record)
 	if err != nil {
 		t.Fatalf("maximum record failed: %v", err)
 	}
-	got, err := sp.getRecord(id)
+	got, err := sp.GetRecord(id)
 	if err != nil {
 		t.Fatalf("getRecord failed: %v", err)
 	}
@@ -437,18 +446,20 @@ func TestMaxRecord(t *testing.T) {
 }
 
 func TestREcordTooLarge(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 	record := bytes.Repeat([]byte("S"), PageSize-HeaderSize-SlotSize+1)
-	if _, err := sp.addRecord(record); err == nil {
+	if _, err := sp.AddRecord(record); err == nil {
 		t.Fatal("expected oversized record to fail")
 	}
 }
 
 func TestManyDeltedSlots(t *testing.T) {
+	// PASSED
 	sp, _ := NewSlottedPage(1)
 	ids := make([]uint16, 0, 20)
 	for i := 0; i < 20; i++ {
-		id, err := sp.addRecord([]byte("record"))
+		id, err := sp.AddRecord([]byte("record"))
 		if err != nil {
 			t.Fatalf("add record %d: %v", i, err)
 		}
@@ -457,7 +468,7 @@ func TestManyDeltedSlots(t *testing.T) {
 	}
 
 	for i := 0; i < len(ids); i += 2 {
-		if _, err := sp.removeRecord(ids[i]); err != nil {
+		if _, err := sp.RemoveRecord(ids[i]); err != nil {
 			t.Fatalf("remove record %d: %v", ids[i], err)
 		}
 	}
