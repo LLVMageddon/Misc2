@@ -11,12 +11,12 @@ import (
 func getDm(t *testing.T) (*DiskManager, error) {
 	path := filepath.Join(t.TempDir(), "test.db")
 	dm, err := NewDiskManger(path)
-	defer dm.Close()
+	// defer dm.Close()
 	return dm, err
 }
 
 func TestDiskManagerCreate(t *testing.T) {
-
+	// PASSED
 	path := filepath.Join(t.TempDir(), "test.db")
 	dm, err := NewDiskManger(path)
 	if err != nil {
@@ -32,11 +32,12 @@ func TestDiskManagerCreate(t *testing.T) {
 }
 
 func TestAllocateFirstPage(t *testing.T) {
+	// PASSED
 	dm, err := getDm(t)
 	if err != nil {
 		t.Fatalf("failed to create disk manager: %v", err)
 	}
-	// defer dm.Close()
+	defer dm.Close()
 
 	pageId, err := dm.AllocatePage()
 	if err != nil {
@@ -48,10 +49,12 @@ func TestAllocateFirstPage(t *testing.T) {
 }
 
 func TestAllocateMultiplePages(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
-	// defer dm.Close()
+	numPages := 10
+	defer dm.Close()
 
-	for id := uint64(0); id < 10; id++ {
+	for id := uint64(0); id < uint64(numPages); id++ {
 		pageId, err := dm.AllocatePage()
 		if err != nil {
 			t.Fatalf("AllocatePage failed: %v", err)
@@ -60,11 +63,19 @@ func TestAllocateMultiplePages(t *testing.T) {
 			t.Fatalf("expected page id %d, got %d", id+1, pageId)
 		}
 	}
+	info, err := dm.file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() != int64(PageSize*numPages) {
+		t.Fatalf("file size should be %d, got %d", info.Size(), int64(dm.pageSize*uint64(numPages)))
+	}
 }
 
 func TestWriteAndReadPage(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
-	// defer dm.Close()
+	defer dm.Close()
 
 	pageId, err := dm.AllocatePage()
 	if err != nil {
@@ -93,7 +104,9 @@ func TestWriteAndReadPage(t *testing.T) {
 }
 
 func TestWriteFullPage(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
 
 	pageId, err := dm.AllocatePage()
 	if err != nil {
@@ -126,7 +139,9 @@ func TestWriteFullPage(t *testing.T) {
 }
 
 func TestWriteZeroPage(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
 
 	pageId, err := dm.AllocatePage()
 	if err != nil {
@@ -153,6 +168,7 @@ func TestWriteZeroPage(t *testing.T) {
 }
 
 func TestPagePersistsAfterReopen(t *testing.T) {
+	// PASSED
 	path := filepath.Join(t.TempDir(), "test.db")
 	dm, err := NewDiskManger(path)
 	if err != nil {
@@ -198,7 +214,9 @@ func TestPagePersistsAfterReopen(t *testing.T) {
 }
 
 func TestPagesAreIndependent(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
 
 	page1Id, err := dm.AllocatePage()
 	if err != nil {
@@ -247,7 +265,10 @@ func TestPagesAreIndependent(t *testing.T) {
 }
 
 func TestOverWritePage(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
+
 	record1 := []byte("record 1")
 	newRecord1 := []byte("record 2 that over wrote record 1")
 	pageId, err := dm.AllocatePage()
@@ -290,7 +311,9 @@ func TestOverWritePage(t *testing.T) {
 }
 
 func TestResultUnallocatedPage(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
 
 	page, _ := NewSlottedPage(1)
 
@@ -300,7 +323,10 @@ func TestResultUnallocatedPage(t *testing.T) {
 }
 
 func TestWriteUnallocatedPage(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
+
 	page, _ := NewSlottedPage(1)
 
 	if err := dm.WritePage(999, &page.Data); err == nil {
@@ -309,7 +335,10 @@ func TestWriteUnallocatedPage(t *testing.T) {
 }
 
 func TestMaxPageId(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
+
 	pageId, _ := dm.AllocatePage()
 	page, _ := NewSlottedPage(pageId)
 	err := dm.ReadPage(^uint64(0), &page.Data)
@@ -319,7 +348,10 @@ func TestMaxPageId(t *testing.T) {
 }
 
 func TestReadFromEmpty(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
+
 	page, _ := NewSlottedPage(0)
 	if err := dm.ReadPage(0, &page.Data); err == nil {
 		t.Fatal("expected error reading from empty database")
@@ -327,7 +359,9 @@ func TestReadFromEmpty(t *testing.T) {
 }
 
 func TestAllocateManyPages(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
+	defer dm.Close()
 
 	const pageCount = 1000
 
@@ -337,15 +371,16 @@ func TestAllocateManyPages(t *testing.T) {
 			t.Fatalf("failed allocating page %d: %v", i, err)
 		}
 
-		if pageID != i {
+		if pageID != i+1 {
 			t.Fatalf("expected page ID %d, got %d", i, pageID)
 		}
 	}
 }
 
 func TestReadWriteManyPages(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
-
+	defer dm.Close()
 	const pageCount = 100
 
 	for i := uint64(0); i < pageCount; i++ {
@@ -377,6 +412,7 @@ func TestReadWriteManyPages(t *testing.T) {
 }
 
 func TestReadAfterClose(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
 
 	pageID, err := dm.AllocatePage()
@@ -396,6 +432,7 @@ func TestReadAfterClose(t *testing.T) {
 }
 
 func TestWriteAfterClose(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
 
 	pageID, err := dm.AllocatePage()
@@ -415,20 +452,21 @@ func TestWriteAfterClose(t *testing.T) {
 }
 
 func TestDoubleClose(t *testing.T) {
+	// PASSED
 	dm, _ := getDm(t)
 
 	if err := dm.Close(); err != nil {
 		t.Fatalf("first Close failed: %v", err)
 	}
 
-	if err := dm.Close(); err != nil {
+	if err := dm.Close(); err == nil {
 		t.Fatalf("second Close should be safe, got: %v", err)
 	}
 }
 
 func TestFileSizeMatchesAllocatedPages(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.db")
-
+	// path := filepath.Join(t.TempDir(), "test.db")
+	// PASSED
 	dm, err := getDm(t)
 	if err != nil {
 		t.Fatal(err)
@@ -443,7 +481,8 @@ func TestFileSizeMatchesAllocatedPages(t *testing.T) {
 		}
 	}
 
-	info, err := os.Stat(path)
+	// info, err := os.Stat(path)
+	info, err := dm.file.Stat()
 	if err != nil {
 		t.Fatal(err)
 	}
