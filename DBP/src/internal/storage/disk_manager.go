@@ -143,6 +143,12 @@ func (dm *DiskManager) WritePage(pPageId uint64, pPage *[PageSize]byte) error {
 	return nil
 }
 
+func (dm *DiskManager) DeletePage(pPageId uint64) error {
+	// TODO: Delete page from db file
+	// TDB: Should I do this here?
+	panic("unimplemented")
+}
+
 func (dm *DiskManager) AllocatePage() (uint64, error) {
 	// DONE
 	// dm.mu.Lock()
@@ -175,4 +181,15 @@ func (dm *DiskManager) AllocatePage() (uint64, error) {
 func (dm *DiskManager) Close() error {
 	// DONE
 	return dm.file.Close()
+}
+
+func (dm *DiskManager) GetDBSize() (int64, error) {
+	status, err := dm.file.Stat()
+	if err != nil {
+		return 0, err
+	}
+
+	size := status.Size()
+	return size, nil
+
 }
